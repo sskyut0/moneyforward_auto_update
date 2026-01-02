@@ -11,6 +11,10 @@ class MoneyForwardUpdater
   LOGIN_URL = "#{MONEYFORWARD_URL}/users/sign_in"
   ACCOUNTS_URL = "#{MONEYFORWARD_URL}/accounts"
 
+  # 待機時間の定数
+  WAIT_TIME = 2
+  ADDITIONAL_AUTH_TIMEOUT = 30
+
   def initialize(email: nil, password: nil, headless: true)
     @email = email || ENV['MONEYFORWARD_EMAIL']
     @password = password || ENV['MONEYFORWARD_PASSWORD']
@@ -80,13 +84,20 @@ class MoneyForwardUpdater
 
     def login
       click_alternative_account_login if on_account_selector_page?
-      perform_login
+
+      @logger.info('メールアドレスとパスワードでログインしています...')
+      sleep WAIT_TIME
+      input_email_and_submit
+      input_password_and_submit
+      wait_additional_authentication if on_email_otp_page?
+      @logger.info('ログインが完了しました')
+
       verify_login_success
     end
 
     def navigate_to_accounts_page
       @driver.navigate.to(ACCOUNTS_URL)
-      sleep 2
+      sleep WAIT_TIME
     end
 
     def on_accounts_page?
@@ -109,7 +120,7 @@ class MoneyForwardUpdater
       @logger.info('アカウント選択画面が表示されました。「別のアカウントでログイン」をクリックします')
       alternative_login_link = @driver.find_element(:xpath, "//a[contains(text(), '別のアカウントでログイン')]")
       alternative_login_link.click
-      sleep 2
+      sleep WAIT_TIME
     end
 
     def verify_login_success
@@ -118,44 +129,32 @@ class MoneyForwardUpdater
       raise 'ログインに失敗しました。追加認証が完了していない可能性があります' if on_sign_in_page?
     end
 
-    def perform_login
-      @logger.info('メールアドレスとパスワードでログインしています...')
-
-      sleep 1
-
-      # メールアドレスを入力
+    def input_email_and_submit
       email_field = @driver.find_element(:xpath, "//input[@type='email']")
       email_field.clear
       email_field.send_keys(@email)
 
-      # メール入力後の「ログインする」ボタンをクリック
       email_submit_button = @driver.find_element(:id, 'submitto')
       email_submit_button.click
+      sleep WAIT_TIME
+    end
 
-      sleep 1
-
-      # パスワードを入力
+    def input_password_and_submit
       password_field = @driver.find_element(:xpath, "//input[@type='password']")
       password_field.send_keys(@password)
 
-      # パスワード入力後の「ログインする」ボタンをクリック
       login_button = @driver.find_element(:id, 'submitto')
       login_button.click
-
-      sleep 3
-
-      wait_additional_authentication if on_email_otp_page?
-
-      @logger.info('ログインが完了しました')
+      sleep WAIT_TIME
     end
 
     def wait_additional_authentication
       return unless on_email_otp_page?
 
       @logger.warn('追加認証が求められています')
-      @logger.info('30秒間待機します。認証コードを入力してください')
+      @logger.info("#{ADDITIONAL_AUTH_TIMEOUT}秒間待機します。認証コードを入力してください")
 
-      30.times do |i|
+      ADDITIONAL_AUTH_TIMEOUT.times do
         unless on_email_otp_page?
           @logger.info('追加認証が完了しました')
           return
@@ -163,16 +162,14 @@ class MoneyForwardUpdater
         sleep 1
       end
 
-      # 30秒経過しても /email_otp にいる場合は認証が完了していない
       raise '追加認証が完了しませんでした。認証コードが入力されていないか、誤っている可能性があります'
     end
 
     def update_accounts
       @logger.info('口座一覧ページに移動しています...')
       @driver.navigate.to(ACCOUNTS_URL)
-      sleep 2
+      sleep WAIT_TIME
 
-      # 更新ボタンを含む行を取得
       account_rows = @driver.find_elements(:xpath, "//tr[.//input[@value='更新']]")
 
       if account_rows.empty?
@@ -181,33 +178,31 @@ class MoneyForwardUpdater
       end
 
       @logger.info("#{account_rows.size}件の金融機関を更新します")
-
-      account_rows.each_with_index do |row, index|
-        begin
-          account_name = extract_account_name_from_row(row)
-          @logger.info("[#{index + 1}/#{account_rows.size}] #{account_name}を更新しています...")
-
-          # 行内の更新ボタンを探してクリック
-          update_button = row.find_element(:xpath, ".//input[@value='更新']")
-          update_button.click
-          sleep 0.5
-
-          @logger.info("[#{index + 1}/#{account_rows.size}] #{account_name}の更新をリクエストしました")
-        rescue Selenium::WebDriver::Error::StaleElementReferenceError
-          @logger.warn("[#{index + 1}/#{account_rows.size}] 要素が無効になりました（既に更新済みの可能性があります）")
-        rescue StandardError => e
-          @logger.error("[#{index + 1}/#{account_rows.size}] 更新中にエラーが発生しました: #{e.message}")
-        end
-      end
-
+      account_rows.each_with_index { |row, index| update_account(row, index + 1, account_rows.size) }
       @logger.info('すべての更新リクエストが完了しました。')
+    end
+
+    def update_account(row, current, total)
+      account_name = extract_account_name_from_row(row)
+      progress = "[#{current}/#{total}]"
+
+      @logger.info("#{progress} #{account_name}を更新しています...")
+
+      update_button = row.find_element(:xpath, ".//input[@value='更新']")
+      update_button.click
+      sleep WAIT_TIME
+
+      @logger.info("#{progress} #{account_name}の更新をリクエストしました")
+    rescue Selenium::WebDriver::Error::StaleElementReferenceError
+      @logger.warn("#{progress} 要素が無効になりました（既に更新済みの可能性があります）")
+    rescue StandardError => e
+      @logger.error("#{progress} 更新中にエラーが発生しました: #{e.message}")
     end
 
     def extract_account_name_from_row(row)
       service_cell = row.find_element(:xpath, './/td[@class="service"]')
       account_link = service_cell.find_element(:xpath, './/a[1]')
-      name = account_link.text.strip
-      return name unless name.empty?
+      account_link.text.strip
     rescue StandardError => e
       @logger.debug("口座名の取得に失敗しました: #{e.message}")
       '不明な口座'
