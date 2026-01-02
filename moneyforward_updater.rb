@@ -57,7 +57,7 @@ class MoneyForwardUpdater
       user_agent = ENV['USER_AGENT'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
       # ユーザーデータディレクトリを指定することで、ブラウザの状態を永続化
-      user_data_dir = File.join(Dir.home, '.moneyforward_chrome_profile')
+      user_data_dir = File.join(File.dirname(__FILE__), '.moneyforward_chrome_profile')
       FileUtils.mkdir_p(user_data_dir) unless Dir.exist?(user_data_dir)
 
       options = Selenium::WebDriver::Chrome::Options.new

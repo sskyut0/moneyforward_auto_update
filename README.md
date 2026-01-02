@@ -64,7 +64,7 @@ HEADLESS=false ruby moneyforward_updater.rb
 
 ## 追加認証の回避について
 
-このスクリプトは、Chromeのユーザーデータディレクトリ（`~/.moneyforward_chrome_profile`）を使用してブラウザの状態を永続化します。これにより、一度ログインして追加認証を完了すると、次回以降は同じデバイスとして認識され、追加認証を求められることなく自動実行が可能になります。
+このスクリプトは、Chromeのユーザーデータディレクトリ（`.moneyforward_chrome_profile`）を使用してブラウザの状態を永続化します。これにより、一度ログインして追加認証を完了すると、次回以降は同じデバイスとして認識され、追加認証を求められることなく自動実行が可能になります。
 
 **初回実行時の手順:**
 1. `HEADLESS=false` でブラウザを表示して実行
@@ -85,7 +85,7 @@ ruby moneyforward_updater.rb
 
 - このスクリプトはマネーフォワードのWeb版を操作します
 - ログイン情報は安全に管理してください（`.env` ファイルはgitignoreに含まれています）
-- ブラウザプロファイルは `~/.moneyforward_chrome_profile` に保存されます
+- ブラウザプロファイルはリポジトリルートの `.moneyforward_chrome_profile` に保存されます
 - マネーフォワードの仕様変更により動作しなくなる可能性があります
 - 頻繁な実行は避け、適切な間隔で実行してください
 
@@ -109,13 +109,13 @@ Selenium 4.6以降では、ChromeDriverは自動的に管理されます。も�
 
 ブラウザプロファイルが正しく保存されていない可能性があります：
 
-1. `~/.moneyforward_chrome_profile` ディレクトリを削除して、再度初回セットアップを実行してください
+1. `.moneyforward_chrome_profile` ディレクトリを削除して、再度初回セットアップを実行してください
    ```bash
-   rm -rf ~/.moneyforward_chrome_profile
+   rm -rf .moneyforward_chrome_profile
    HEADLESS=false ruby moneyforward_updater.rb
    ```
 
-2. 初回実行時は必ず `HEADLESS=false` で実行し、追加認証コードを15秒以内に入力してください
+2. 初回実行時は必ず `HEADLESS=false` で実行し、追加認証コードを30秒以内に入力してください
 
 3. 環境変数 `USER_AGENT` を設定して、User-Agentを固定することもできます
 
