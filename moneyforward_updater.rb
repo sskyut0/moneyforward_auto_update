@@ -20,7 +20,7 @@ class MoneyForwardUpdater
     @password = password || ENV['MONEYFORWARD_PASSWORD']
     @headless = headless
     @logger = Logger.new($stdout)
-    @logger.level = Logger::INFO
+    @logger.level = ENV['DEBUG'] == 'true' ? Logger::DEBUG : Logger::INFO
 
     validate_credentials!
   end
@@ -170,42 +170,36 @@ class MoneyForwardUpdater
       @driver.navigate.to(ACCOUNTS_URL)
       sleep WAIT_TIME
 
-      account_rows = @driver.find_elements(:xpath, "//tr[.//input[@value='更新']]")
+      # 更新可能な口座のIDを取得
+      account_ids = @driver.find_elements(:xpath, "//tr[.//input[@value='更新' and not(@disabled)]]")
+                           .map { |row| row['id'] }
+                           .compact
 
-      if account_rows.empty?
-        @logger.warn('更新可能な口座が見つかりませんでした。すでに最新の状態か、ページ構造が変更されている可能性があります。')
+      if account_ids.empty?
+        @logger.warn('更新可能な口座が見つかりませんでした。')
         return
       end
 
-      @logger.info("#{account_rows.size}件の金融機関を更新します")
-      account_rows.each_with_index { |row, index| update_account(row, index + 1, account_rows.size) }
+      @logger.info("#{account_ids.size}件の金融機関を更新します")
+
+      account_ids.each_with_index do |account_id, index|
+        update_account(account_id, index + 1, account_ids.size)
+      end
+
       @logger.info('すべての更新リクエストが完了しました。')
     end
 
-    def update_account(row, current, total)
-      account_name = extract_account_name_from_row(row)
+    def update_account(account_id, current, total)
+      row = @driver.find_element(:id, account_id)
+      account_name = row.find_element(:xpath, './/td[@class="service"]//a[1]').text.strip rescue '不明な口座'
       progress = "[#{current}/#{total}]"
 
       @logger.info("#{progress} #{account_name}を更新しています...")
-
-      update_button = row.find_element(:xpath, ".//input[@value='更新']")
-      update_button.click
+      row.find_element(:xpath, ".//input[@value='更新']").click
       sleep WAIT_TIME
-
       @logger.info("#{progress} #{account_name}の更新をリクエストしました")
-    rescue Selenium::WebDriver::Error::StaleElementReferenceError
-      @logger.warn("#{progress} 要素が無効になりました（既に更新済みの可能性があります）")
     rescue StandardError => e
       @logger.error("#{progress} 更新中にエラーが発生しました: #{e.message}")
-    end
-
-    def extract_account_name_from_row(row)
-      service_cell = row.find_element(:xpath, './/td[@class="service"]')
-      account_link = service_cell.find_element(:xpath, './/a[1]')
-      account_link.text.strip
-    rescue StandardError => e
-      @logger.debug("口座名の取得に失敗しました: #{e.message}")
-      '不明な口座'
     end
 end
 
