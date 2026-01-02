@@ -1,0 +1,6 @@
+.idea/
+.env
+Gemfile.lock
+vendor/
+.DS_Store
+.claude/settings.local.json
