@@ -69,7 +69,7 @@ class MoneyForwardUpdater
       options.add_argument("--user-agent=#{user_agent}")
       options.add_argument("--user-data-dir=#{user_data_dir}")
 
-      service = Selenium::WebDriver::Chrome::Service.new(path: '/usr/bin/chromedriver')
+      service = Selenium::WebDriver::Chrome::Service.new(path: ENV.fetch('CHROMEDRIVER_PATH', '/usr/bin/chromedriver'))
 
       @driver = Selenium::WebDriver.for(:chrome, options: options, service: service)
       @driver.manage.timeouts.implicit_wait = 10
